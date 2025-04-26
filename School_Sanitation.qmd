@@ -1,0 +1,323 @@
+---
+title: "The Future Generation: Analyzing Global Trends in the Proportion of Schools with Basic Sanitation Services"
+author: "Archit Gupta"
+
+format:
+  html:
+    toc: true
+    code-fold: true
+    code-tools: true
+    code-summary: "Show Code"
+    smooth-scroll: true
+    theme: cosmo
+    embed-resources: true
+
+jupyter: python3
+---
+
+## Introduction
+
+Access to basic sanitation facilities in schools is a critical indicator of global development and children's rights. It reflects a nation's ability to support the health, well-being, and educational outcomes of its future generations. Sanitation goes beyond the provision of toilets to include clean water, handwashing facilities, and hygienic waste management systems. Schools lacking basic sanitation face higher absenteeism rates, especially among girls, and contribute to the spread of communicable diseases, undermining broader development goals.
+
+Globally, millions of children attend schools that lack even basic sanitation services. While substantial progress has been made through initiatives like the Millennium Development Goals (MDGs) and Sustainable Development Goals (SDGs), gaps remain across regions and countries. This report uses UNICEF datasets to investigate the proportion of schools with basic sanitation services, uncover disparities, and explore socio-economic factors that correlate with sanitation access.
+
+
+## Dataset Overview
+
+This study combines two rich datasets to provide a multi-dimensional analysis:
+
+- **unicef_indicator_1.csv**: Contains quantitative data on the **proportion of schools with basic sanitation services**, offering a direct view into sanitation access globally.
+- **unicef_metadata.csv**: Includes critical country-level socio-economic indicators such as GDP per capita, population totals, Gross National Income (GNI), life expectancy, and inflation rates.
+
+Merging these datasets enables a comprehensive assessment of how macroeconomic conditions influence sanitation outcomes in education. Key variables analyzed include sanitation access rates, economic indicators, demographic trends, and health infrastructure.
+
+```{python}
+#| echo: false
+#| output: false
+
+#| colab: {base_uri: https://localhost:8080/}
+#| collapsed: true
+# STEP 1A: Install required packages (only once)
+!pip install polars plotnine geopandas
+
+# STEP 1B: Import required libraries
+import polars as pl
+import pandas as pd
+from plotnine import *
+import geopandas as gpd
+
+# Confirm successful imports
+```
+
+```{python}
+# Step 1: Read your two CSV files
+indicator_df = pd.read_csv('unicef_indicator_1.csv')
+metadata_df = pd.read_csv('unicef_metadata.csv')
+
+# Step 2: Filter sanitation data
+sanitation_df = indicator_df[indicator_df['indicator'] == 'Proportion of schools with basic sanitation services']
+
+# Step 3: Select required columns
+sanitation_df = sanitation_df[['country', 'time_period', 'obs_value', 'current_age']]
+sanitation_df = sanitation_df.rename(columns={
+    'country': 'Country',
+    'time_period': 'Year',
+    'obs_value': 'Value',
+    'current_age': 'Age_Group'
+})
+
+# Step 4: Merge with metadata
+metadata_df = metadata_df.rename(columns={'country': 'Country'})
+full_data_pd = pd.merge(sanitation_df, metadata_df, on="Country", how="left")
+```
+
+## Analysis and Visualizations
+
+# Table of Figures
+| Figure | Title | Type of Chart |
+|:-------|:------|:--------------|
+| **Figure 1** | Top 10 Countries: Highest School Sanitation Access | Interactive Bar Chart |
+| **Figure 2** | Global Sanitation Distribution | Choropleth World Map |
+| **Figure 3** | Global Trend: School Sanitation | Scatter Plot with Linear Regression |
+| **Figure 4** | Global Time Series Trends | Line Plot |
+| **Figure 5** | Global Snapshot: GDP vs Sanitation Access | Scatter Plot with Trendline |
+
+
+## Top 10 Countries: Highest School Sanitation Access (Interactive Bar Chart)
+
+This bar chart highlights the leading countries achieving nearly universal basic sanitation in schools. Interactive bar charts allow quick comparisons between countries and spotlight those that exemplify best practices.
+
+```{python}
+#| colab: {base_uri: https://localhost:8080/, height: 542}
+import plotly.express as px
+
+# STEP 1: Take latest sanitation year per country
+latest_data = full_data_pd.sort_values(['Country', 'Year'], ascending=[True, False]).drop_duplicates('Country')
+
+# STEP 2: Drop rows with missing sanitation value (Value = NaN)
+latest_data = latest_data.dropna(subset=["Value"])
+
+# STEP 3: Optional: Remove countries where sanitation is exactly 100% (for variation)
+latest_data = latest_data[latest_data["Value"] < 100]
+
+# STEP 4: Sort and pick Top 10
+top10_countries = latest_data.sort_values("Value", ascending=False).head(10)
+
+# STEP 5: Create an interactive bar chart
+fig = px.bar(
+    top10_countries,
+    x="Value",
+    y="Country",
+    orientation="h",
+    color="Value",  # Color by sanitation %
+    color_continuous_scale="Blues",
+    title="Top 10 Countries: Schools with Basic Sanitation Services ",
+    labels={"Value": "Sanitation (%)", "Country": "Country"},
+    hover_data=["Population, total", "GDP per capita (constant 2015 US$)", "Life expectancy at birth, total (years)"]
+)
+
+fig.show()
+```
+**Insight:** Countries like Monaco, Luxembourg, and Singapore show exceptional sanitation coverage, correlating with high GDP per capita and strong educational policies. These examples can guide strategic interventions in lower-performing nations.
+
+
+## Global Sanitation Distribution (Choropleth World Map)
+
+The choropleth map provides a visual overview of how sanitation services are distributed globally. Such maps enable spatial analysis and quickly reveal regional disparities.
+
+```{python}
+#| colab: {base_uri: https://localhost:8080/, height: 542}
+import plotly.express as px
+
+# STEP 1: Prepare latest sanitation data
+latest_map_data = full_data_pd.sort_values(['Country', 'Year'], ascending=[True, False]).drop_duplicates('Country')
+
+# STEP 2: Drop missing sanitation values
+latest_map_data = latest_map_data.dropna(subset=["Value"])
+
+# STEP 3: Create the Choropleth Map
+fig = px.choropleth(
+    latest_map_data,
+    locations="Country",
+    locationmode="country names",
+    color="Value",
+    hover_name="Country",
+    hover_data={
+        "Value": True,
+        "Population, total": True,
+        "GDP per capita (constant 2015 US$)": True,
+        "Life expectancy at birth, total (years)": True
+    },
+    color_continuous_scale="Viridis",
+    title="World Map: Proportion of Schools with Basic Sanitation Services ",
+    labels={"Value": "Sanitation (%)"}
+)
+
+# Beautify the map layout
+fig.update_layout(
+    geo=dict(
+        showland=True,
+        landcolor="LightGray",
+        showocean=True,
+        oceancolor="LightBlue",
+    )
+)
+
+# Show the map
+fig.show()
+```
+**Insight:** High sanitation access in Europe, North America, and parts of East Asia contrasts sharply with significant deficits in Sub-Saharan Africa, South Asia, and conflict-affected regions. These visual disparities highlight where international support and development efforts should prioritize.
+
+
+## Global Trend: School Sanitation (Scatter Plot with Linear Regression)
+
+This scatter plot examines the association between national wealth and school sanitation access. The linear regression line quantifies the strength and direction of this relationship.
+
+```{python}
+#| colab: {base_uri: https://localhost:8080/, height: 542}
+import plotly.express as px
+
+# We'll use full_data_pd directly
+
+# STEP 1: Drop missing sanitation values
+scatter_data = full_data_pd.dropna(subset=["Value"])
+
+# STEP 2: Create the scatter plot
+fig = px.scatter(
+    scatter_data,
+    x="Year",
+    y="Value",
+    color="GNI (current US$)",  # Color points by GNI
+    hover_name="Country",
+    trendline="ols",  # Add regression line
+    color_continuous_scale="Viridis",  # <<< Use same Viridis color scale
+    title="Global Trend: Schools with Basic Sanitation Services Over Years ",
+    labels={
+        "Year": "Year",
+        "Value": "Sanitation (%)",
+        "GNI (current US$)": "GNI (Current USD)"
+    }
+)
+
+# Show the plot
+fig.show()
+```
+**Insight:** Wealthier countries generally achieve higher sanitation coverage in schools. Nonetheless, outliers—countries with moderate GDP yet strong sanitation access—suggest that political will, education policies, and targeted programs can sometimes override economic limitations.
+
+
+## Global Time Series Trends (Line Plot: Sanitation Over Time)
+
+This line plot depicts how sanitation coverage has evolved over time globally. Line plots are essential for recognizing trends and temporal dynamics.
+
+```{python}
+#| colab: {base_uri: https://localhost:8080/, height: 542}
+import plotly.express as px
+
+# We'll use full_data_pd again
+
+# STEP 1: Drop missing sanitation values
+line_data = full_data_pd.dropna(subset=["Value"])
+
+# STEP 2: Create the time series line plot
+fig = px.line(
+    line_data,
+    x="Year",
+    y="Value",
+    color="Country",  # Each country gets a different color line
+    hover_name="Country",
+    title="Time Series: Schools with Basic Sanitation Services by Country",
+    labels={
+        "Year": "Year",
+        "Value": "Sanitation (%)",
+        "Country": "Country"
+    }
+)
+
+# Show the plot
+fig.show()
+```
+**Insight:** A steady upward trend suggests significant improvements over the past two decades, reflecting the impact of international development agendas. However, acceleration is uneven, and recent years highlight plateauing progress in some regions.
+
+
+## Global Snapshot: GDP vs Sanitation Access (Scatter Plot with Trendline)
+
+This scatter plot with a fitted trendline compares countries based on GDP per capita and sanitation access levels.
+
+```{python}
+#| colab: {base_uri: https://localhost:8080/, height: 542}
+import plotly.express as px
+
+# Prepare latest sanitation data
+latest_data = full_data_pd.sort_values(['Country', 'Year'], ascending=[True, False]).drop_duplicates('Country')
+latest_data = latest_data.dropna(subset=["Value", "GDP per capita (constant 2015 US$)"])
+
+# Fill missing population
+latest_data["Population, total"] = latest_data["Population, total"].fillna(1)
+
+# Create upgraded scatter plot with trendline
+fig = px.scatter(
+    latest_data,
+    x="GDP per capita (constant 2015 US$)",
+    y="Value",
+    size="Population, total",
+    color="Value",
+    color_continuous_scale="Viridis",
+    size_max=50,
+    hover_name="Country",
+    hover_data={
+        "GDP per capita (constant 2015 US$)": True,
+        "Population, total": True,
+        "Life expectancy at birth, total (years)": True,
+        "Value": True
+    },
+    trendline="ols",      # ✨ <== This adds the trendline
+    title="Global Snapshot: Economic Prosperity vs School Sanitation Access "
+)
+
+# Update layout
+fig.update_layout(
+    plot_bgcolor="white",
+    xaxis_title="GDP per Capita (constant 2015 US$)",
+    yaxis_title="Sanitation (%)",
+    coloraxis_colorbar=dict(
+        title="Sanitation (%)",
+        ticks="outside"
+    ),
+    font=dict(
+        family="Arial",
+        size=15,
+        color="black"
+    ),
+    legend_title_font_color="black",
+)
+
+# Light grey grids
+fig.update_xaxes(showgrid=True, gridwidth=0.5, gridcolor='LightGrey')
+fig.update_yaxes(showgrid=True, gridwidth=0.5, gridcolor='LightGrey')
+
+fig.show()
+```
+**Insight:** While economic wealth strongly correlates with sanitation services, the presence of outliers suggests that effective governance, investments in education, and community-driven initiatives play substantial roles in advancing school sanitation independent of GDP.
+
+
+## Key Challenges Identified
+
+- **Economic Disparity**: Despite higher sanitation access in wealthy countries, many low-income and middle-income nations struggle to invest adequately in sanitation infrastructure.
+- **Infrastructure Gaps**: Geographic isolation, political instability, and conflict inhibit the development of school sanitation facilities, especially in rural and marginalized areas.
+- **Policy and Governance Issues**: A lack of comprehensive sanitation policies and accountability frameworks prevents uniform progress.
+- **Social Inequalities**: Disparities based on gender, disability, and socio-economic status exacerbate unequal access to sanitation services.
+
+## Key Takeaways
+
+- Economic development provides critical but not sufficient conditions for ensuring basic sanitation in schools.
+- Robust public policies, targeted aid, and sustained investments are necessary to address inequalities.
+- Innovations like low-cost sanitation technology, community engagement, and public-private partnerships show promising results.
+- Regular monitoring, evaluation, and adaptation are essential to achieving and maintaining high sanitation coverage rates.
+
+## Conclusion
+
+Universal access to basic sanitation services in schools is a cornerstone of equitable, quality education and public health. While the world has made substantial progress, persistent gaps—especially for vulnerable populations—remain a barrier to achieving the full vision of the Sustainable Development Goals.
+Future efforts must focus on inclusive infrastructure development, policy innovation, and sustained financial investment. By ensuring that every child learns in an environment with safe and dignified sanitation, societies not only promote better educational outcomes but also foster healthier, more equitable communities and sustainable global development.
+
+## 
+***End of Report***
